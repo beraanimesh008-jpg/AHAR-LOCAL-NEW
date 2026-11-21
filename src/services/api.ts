@@ -38,10 +38,17 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
       headers
     });
 
-    const data = await res.json().catch(() => ({
-      success: false,
-      message: 'Network error or invalid server response'
-    }));
+    const contentType = res.headers.get('content-type') || '';
+    let data: any = null;
+    if (contentType.includes('application/json')) {
+      data = await res.json().catch(() => null);
+    }
+
+    if (!data) {
+      throw new Error(
+        `API server unavailable on ${url} (HTTP ${res.status}). Make sure the Node.js backend is running or VITE_API_BASE_URL is configured.`
+      );
+    }
 
     if (!res.ok || data.success === false) {
       throw new Error(data.message || `Request failed with status ${res.status}`);

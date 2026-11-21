@@ -11,9 +11,10 @@ import { DeliveryPartnerApp } from './components/delivery/DeliveryPartnerApp';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AppNotification } from './types';
 import { apiRequest } from './services/api';
+import { subscribeToUserNotifications } from './services/firestoreService';
 
 const MainAppContent: React.FC = () => {
-  const { role, user, token, openAuthModal } = useAuth();
+  const { role, user, token, firebaseUser, isFirebaseReady } = useAuth();
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -47,6 +48,33 @@ const MainAppContent: React.FC = () => {
     const interval = setInterval(fetchNotifications, 8000);
     return () => clearInterval(interval);
   }, [user, token]);
+
+  useEffect(() => {
+    if (!isFirebaseReady || !firebaseUser || !firebaseUser.emailVerified) return;
+    const unsubscribe = subscribeToUserNotifications(firebaseUser.uid, (fsNotifs) => {
+      if (fsNotifs.length > 0) {
+        setNotifications((prev) => {
+          const existingIds = new Set(prev.map((n) => String(n.id)));
+          const mapped: AppNotification[] = fsNotifs
+            .filter((n) => !existingIds.has(String(n.id)))
+            .map((n, idx) => ({
+              id: Number(n.id) || Date.now() + idx,
+              user_id: user?.id || 0,
+              role: role,
+              title: n.title || 'Update',
+              title_bn: n.titleBn || n.title || 'আপডেট',
+              message: n.message || '',
+              message_bn: n.messageBn || n.message || '',
+              type: n.type || 'order_status',
+              is_read: n.isRead ? 1 : 0,
+              created_at: new Date().toISOString(),
+            }));
+          return mapped.length > 0 ? [...mapped, ...prev] : prev;
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, [isFirebaseReady, firebaseUser, user?.id, role]);
 
   const handleMarkAsRead = async (id: number) => {
     try {

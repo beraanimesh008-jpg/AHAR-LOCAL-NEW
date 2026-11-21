@@ -1449,6 +1449,7 @@ const dbPassword = process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || '
 const dbName = process.env.DB_NAME || process.env.DATABASE_NAME || 'u691798054_aharlocal_db';
 
 const isProduction = process.env.NODE_ENV === 'production';
+const requireMysql = process.env.REQUIRE_MYSQL === 'true';
 
 if (dbHost && dbUser) {
   try {
@@ -1468,15 +1469,16 @@ if (dbHost && dbUser) {
     console.log(`[Database] MySQL pool initialized successfully for host: ${dbHost}, database: ${dbName}`);
   } catch (err: any) {
     console.error('[Database] Failed to initialize MySQL connection pool:', err.message);
-    if (isProduction) {
+    if (isProduction && requireMysql) {
       throw new Error(`CRITICAL: Failed to initialize MySQL connection pool in production: ${err.message}`);
     }
+    console.warn('[Database] Falling back to memory store because MySQL pool initialization failed.');
   }
 } else {
-  if (isProduction) {
+  if (isProduction && requireMysql) {
     throw new Error('CRITICAL: Missing required MySQL environment variables (DB_HOST, DB_USER, DB_NAME, DB_PASSWORD) in production environment.');
   } else {
-    console.warn('[Database] MySQL credentials not provided. Running in memory-fallback mode for development/testing.');
+    console.warn('[Database] MySQL credentials not provided. Running in memory-fallback mode.');
   }
 }
 

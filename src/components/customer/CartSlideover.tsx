@@ -29,6 +29,8 @@ import { apiRequest } from '../../services/api';
 import { playSuccessChime } from '../common/AudioAlerts';
 import { LocationPickerMap } from '../maps/LocationPickerMap';
 import { PaymentGatewayModal } from './PaymentGatewayModal';
+import { auth, BLUEPRINT_LIMITS, sanitizeStr } from '../../firebase';
+import { syncOrderToFirestore } from '../../services/firestoreService';
 
 interface CartSlideoverProps {
   isOpen: boolean;
@@ -263,7 +265,8 @@ export const CartSlideover: React.FC<CartSlideoverProps> = ({
       return;
     }
 
-    const finalAddress = isManualAddressToggle ? (manualAddressText || deliveryAddress) : deliveryAddress;
+    const rawAddress = isManualAddressToggle ? (manualAddressText || deliveryAddress) : deliveryAddress;
+    const finalAddress = sanitizeStr(rawAddress, BLUEPRINT_LIMITS.ADDRESS_MAX, 'Kolkata');
 
     if (isManualAddressToggle && isAddressOutsideServiceArea(finalAddress)) {
       setOrderError('আপনার ম্যানুয়াল ঠিকানাটি আমাদের সার্ভিস এলাকার বাইরে (Outside Serviceable Area)! অনুগ্রহ করে সঠিক সার্ভিসিং এলাকার ঠিকানা দিন।');
@@ -296,6 +299,38 @@ export const CartSlideover: React.FC<CartSlideoverProps> = ({
         method: 'POST',
         body: JSON.stringify(payload)
       });
+
+      if (auth.currentUser && auth.currentUser.emailVerified && order?.id) {
+        syncOrderToFirestore({
+          orderId: order.id,
+          orderNumber: order.order_number || `AHAR-${order.id}`,
+          customerName: user?.name || auth.currentUser.displayName || 'Customer',
+          restaurantId: targetRestId,
+          restaurantName: restaurant?.name || 'Local Kitchen',
+          deliveryAddress: finalAddress,
+          deliveryLat,
+          deliveryLng,
+          subtotal,
+          deliveryFee: effectiveDeliveryFee,
+          discount: discountAmount,
+          tax,
+          grandTotal: effectiveGrandTotal,
+          paymentMethod: paymentMethod === 'cod' ? 'cod' : 'upi',
+          paymentStatus: paymentMethod === 'cod' ? 'cod' : 'paid',
+          items: items.map((i) => {
+            const unitPrice = i.food.discount_price || i.food.price;
+            return {
+              foodId: i.food.id,
+              foodName: i.food.name,
+              price: unitPrice,
+              quantity: i.quantity,
+              totalPrice: unitPrice * i.quantity,
+            };
+          }),
+        }).catch((fsErr) => {
+          console.warn('Firestore order sync warning:', fsErr);
+        });
+      }
 
       // Celebration
       try {

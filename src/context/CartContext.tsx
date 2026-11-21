@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { CartItem, FoodItem, Restaurant } from '../types';
 import { apiRequest } from '../services/api';
+import { useAuth } from './AuthContext';
+import { BLUEPRINT_LIMITS, sanitizeStr, sanitizeId } from '../firebase';
+import {
+  saveCartLocationToFirestore,
+  fetchCartLocationFromFirestore,
+} from '../services/firestoreService';
 
 interface PlatformRates {
   baseFare: number;
@@ -99,12 +105,28 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   // Default delivery address (Ballygunge, Kolkata)
+  const { firebaseUser, isFirebaseReady } = useAuth();
   const [deliveryAddress, setDeliveryAddress] = useState(
     'Flat 3B, Sunshine Heights, 14 Ballygunge Circular Road, Kolkata 700019'
   );
   const [deliveryLandmark, setDeliveryLandmark] = useState('Near Ballygunge Post Office');
   const [deliveryLat, setDeliveryLat] = useState(22.5292);
   const [deliveryLng, setDeliveryLng] = useState(88.3612);
+
+  useEffect(() => {
+    if (!isFirebaseReady || !firebaseUser || !firebaseUser.emailVerified) return;
+    fetchCartLocationFromFirestore(firebaseUser.uid)
+      .then((saved) => {
+        if (saved && saved.deliveryAddress) {
+          setDeliveryAddress(sanitizeStr(saved.deliveryAddress, BLUEPRINT_LIMITS.ADDRESS_MAX));
+          if (typeof saved.deliveryLat === 'number') setDeliveryLat(saved.deliveryLat);
+          if (typeof saved.deliveryLng === 'number') setDeliveryLng(saved.deliveryLng);
+        }
+      })
+      .catch((err) => {
+        console.warn('Firestore cart location load warning:', err);
+      });
+  }, [isFirebaseReady, firebaseUser]);
 
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -221,10 +243,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setDeliveryLocation = (address: string, lat: number, lng: number, landmark?: string) => {
-    setDeliveryAddress(address);
+    const cleanAddr = sanitizeStr(address, BLUEPRINT_LIMITS.ADDRESS_MAX, 'Kolkata');
+    setDeliveryAddress(cleanAddr);
     setDeliveryLat(lat);
     setDeliveryLng(lng);
     if (landmark) setDeliveryLandmark(landmark);
+
+    if (firebaseUser && firebaseUser.emailVerified) {
+      saveCartLocationToFirestore(firebaseUser.uid, {
+        restaurantId: restaurant?.id ? sanitizeId(restaurant.id) : undefined,
+        deliveryAddress: cleanAddr,
+        deliveryLat: lat,
+        deliveryLng: lng,
+      }).catch((err) => {
+        console.warn('Firestore cart location save warning:', err);
+      });
+    }
   };
 
   const detectLiveLocation = async (): Promise<{ success: boolean; message: string; lat?: number; lng?: number }> => {
@@ -237,9 +271,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          setDeliveryLat(lat);
-          setDeliveryLng(lng);
-          setDeliveryAddress(`Current Live Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+          const label = `Current Live Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+          setDeliveryLocation(label, lat, lng);
           resolve({
             success: true,
             message: 'Live GPS location updated successfully',

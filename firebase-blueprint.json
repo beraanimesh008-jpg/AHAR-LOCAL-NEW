@@ -1,0 +1,618 @@
+{
+  "entities": {
+    "UserPublicProfile": {
+      "title": "User Public Profile",
+      "description": "Publicly non-sensitive user identity and role metadata stored under users/{userId}.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "User display name."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["customer", "restaurant", "delivery", "admin"],
+          "description": "Application role."
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Profile avatar URL."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["en", "bn"],
+          "description": "Preferred UI language."
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Account active flag."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "displayName", "role", "language", "isActive", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "User Private PII",
+      "description": "Isolated PII document stored under users/{userId}/private/info.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase Auth UID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200,
+          "description": "Private user email address."
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 30,
+          "description": "Private user phone number."
+        },
+        "dob": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Date of birth."
+        },
+        "gender": {
+          "type": "string",
+          "enum": ["Male", "Female", "Other", "Not specified"],
+          "description": "Gender."
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Saved delivery address."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["upi", "bank", "cod"],
+          "description": "Preferred payout/payment method."
+        },
+        "upiId": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "UPI handle."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "email", "updatedAt"]
+    },
+    "UserCartState": {
+      "title": "User Cart State",
+      "description": "Private persisted delivery coordinates and cart metadata under users/{userId}/private/cart.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase Auth UID."
+        },
+        "restaurantId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Active cart restaurant ID."
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Selected delivery address."
+        },
+        "deliveryLat": {
+          "type": "number",
+          "description": "Delivery latitude."
+        },
+        "deliveryLng": {
+          "type": "number",
+          "description": "Delivery longitude."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "deliveryAddress", "deliveryLat", "deliveryLng", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "Admin Record",
+      "description": "Trusted admin allowlist document under admins/{userId}.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Admin UID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200,
+          "description": "Admin email."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Restaurant": {
+      "title": "Restaurant",
+      "description": "Local restaurant listing and storefront settings.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Restaurant document ID."
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Restaurant display name."
+        },
+        "nameBn": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Bengali restaurant name."
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Storefront street address."
+        },
+        "latitude": {
+          "type": "number",
+          "description": "Store latitude."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Store longitude."
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Restaurant cover image URL."
+        },
+        "isOpen": {
+          "type": "boolean",
+          "description": "Whether the restaurant is accepting orders."
+        },
+        "isPureVeg": {
+          "type": "boolean",
+          "description": "Pure vegetarian indicator."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected", "blocked"],
+          "description": "Admin approval status."
+        },
+        "avgDeliveryMinutes": {
+          "type": "number",
+          "description": "Estimated prep and delivery duration."
+        },
+        "minOrderAmount": {
+          "type": "number",
+          "description": "Minimum order value in INR."
+        },
+        "rating": {
+          "type": "number",
+          "description": "Average storefront rating."
+        },
+        "cuisineTypes": {
+          "type": "array",
+          "description": "Bounded list of up to 10 cuisine tags."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["id", "ownerUid", "name", "address", "latitude", "longitude", "isOpen", "isPureVeg", "status", "createdAt", "updatedAt"]
+    },
+    "MenuItem": {
+      "title": "Menu Item",
+      "description": "Food item in a restaurant's menu subcollection.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Food item document ID."
+        },
+        "restaurantId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent restaurant ID."
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Restaurant owner UID."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Dish name."
+        },
+        "nameBn": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Bengali dish name."
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Menu category."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 600,
+          "description": "Dish description."
+        },
+        "price": {
+          "type": "number",
+          "description": "Unit price in INR."
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Dish image URL."
+        },
+        "isVeg": {
+          "type": "boolean",
+          "description": "Vegetarian dish flag."
+        },
+        "isAvailable": {
+          "type": "boolean",
+          "description": "Availability flag."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["id", "restaurantId", "ownerUid", "name", "category", "price", "isVeg", "isAvailable", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer food order with strict status lifecycle.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Order document ID."
+        },
+        "orderNumber": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Human-readable order code."
+        },
+        "customerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Customer Firebase Auth UID."
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Customer display name."
+        },
+        "restaurantId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Target restaurant ID."
+        },
+        "restaurantOwnerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Restaurant owner UID."
+        },
+        "restaurantName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Restaurant name."
+        },
+        "deliveryPartnerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Assigned delivery partner UID."
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Delivery street address."
+        },
+        "deliveryLat": {
+          "type": "number",
+          "description": "Delivery latitude."
+        },
+        "deliveryLng": {
+          "type": "number",
+          "description": "Delivery longitude."
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Food subtotal in INR."
+        },
+        "deliveryFee": {
+          "type": "number",
+          "description": "Delivery charge in INR."
+        },
+        "discount": {
+          "type": "number",
+          "description": "Applied discount in INR."
+        },
+        "tax": {
+          "type": "number",
+          "description": "Tax amount in INR."
+        },
+        "grandTotal": {
+          "type": "number",
+          "description": "Final order total in INR."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["cod", "upi", "razorpay", "cashfree"],
+          "description": "Payment method."
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["pending", "paid", "failed", "cod"],
+          "description": "Payment state."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "preparing", "ready", "assigned", "picked_up", "on_the_way", "delivered", "cancelled"],
+          "description": "Order fulfillment status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["id", "orderNumber", "customerUid", "customerName", "restaurantId", "restaurantOwnerUid", "restaurantName", "deliveryAddress", "deliveryLat", "deliveryLng", "subtotal", "deliveryFee", "discount", "tax", "grandTotal", "paymentMethod", "paymentStatus", "status", "createdAt", "updatedAt"]
+    },
+    "OrderLineItem": {
+      "title": "Order Line Item",
+      "description": "Individual dish line item stored in orders/{orderId}/items/{itemId}.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Line item ID."
+        },
+        "orderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent order ID."
+        },
+        "customerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Order owner customer UID."
+        },
+        "restaurantOwnerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Target restaurant owner UID."
+        },
+        "foodId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Food item ID."
+        },
+        "foodName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Food item name."
+        },
+        "price": {
+          "type": "number",
+          "description": "Unit price."
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Quantity ordered."
+        },
+        "totalPrice": {
+          "type": "number",
+          "description": "Line total price."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["id", "orderId", "customerUid", "restaurantOwnerUid", "foodId", "foodName", "price", "quantity", "totalPrice", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time user notification record.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Notification document ID."
+        },
+        "userUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Recipient Firebase Auth UID."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Notification title."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600,
+          "description": "Notification message body."
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Notification category."
+        },
+        "isRead": {
+          "type": "boolean",
+          "description": "Read status flag."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["id", "userUid", "title", "message", "type", "isRead", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublicProfile" },
+      "description": "Public user role and display metadata."
+    },
+    "/users/{userId}/private/info": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Strictly private user PII (email, phone, dob, address, payout info)."
+    },
+    "/users/{userId}/private/cart": {
+      "schema": { "$ref": "#/entities/UserCartState" },
+      "description": "Private persisted delivery address and cart metadata."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted administrator lookup documents."
+    },
+    "/restaurants/{restaurantId}": {
+      "schema": { "$ref": "#/entities/Restaurant" },
+      "description": "Publicly browsable restaurant listings."
+    },
+    "/restaurants/{restaurantId}/menu/{foodId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Menu items belonging to a restaurant."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer food orders."
+    },
+    "/orders/{orderId}/items/{itemId}": {
+      "schema": { "$ref": "#/entities/OrderLineItem" },
+      "description": "Line items belonging to an order."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User-scoped notifications."
+    }
+  }
+}

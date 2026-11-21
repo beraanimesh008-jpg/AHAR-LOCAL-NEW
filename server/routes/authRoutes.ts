@@ -486,7 +486,7 @@ authRouter.put('/profile', authenticateToken, async (req: AuthenticatedRequest, 
 // Google Authentication Check/Login
 authRouter.post('/google-auth', async (req: Request, res: Response) => {
   try {
-    const { googleEmail, googleName, googlePhoto, role, idToken, credential } = req.body;
+    const { googleEmail, googleName, googlePhoto, role, idToken, credential, firebaseIdToken } = req.body;
     const tokenToVerify = idToken || credential;
 
     if (!role) {
@@ -501,7 +501,51 @@ authRouter.post('/google-auth', async (req: Request, res: Response) => {
     let verifiedName = googleName;
     let verifiedPhoto = googlePhoto;
 
-    if (tokenToVerify) {
+    if (firebaseIdToken) {
+      try {
+        let firebaseApiKey = process.env.FIREBASE_API_KEY || '';
+        if (!firebaseApiKey) {
+          try {
+            const fs = await import('node:fs');
+            const path = await import('node:path');
+            const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
+            if (fs.existsSync(cfgPath)) {
+              const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+              firebaseApiKey = cfg.apiKey || '';
+            }
+          } catch {
+            // Ignore config read error
+          }
+        }
+
+        if (firebaseApiKey) {
+          const lookupRes = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseApiKey)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken: firebaseIdToken })
+            }
+          );
+          if (!lookupRes.ok) {
+            return res.status(401).json({ success: false, message: 'Firebase ID token verification failed' });
+          }
+          const lookupData: any = await lookupRes.json();
+          const fbUser = lookupData?.users?.[0];
+          if (!fbUser || !fbUser.email) {
+            return res.status(401).json({ success: false, message: 'Invalid Firebase user payload' });
+          }
+          if (fbUser.emailVerified === false) {
+            return res.status(401).json({ success: false, message: 'Unverified Google email address' });
+          }
+          verifiedEmail = fbUser.email;
+          verifiedName = fbUser.displayName || verifiedName || fbUser.email.split('@')[0];
+          verifiedPhoto = fbUser.photoUrl || verifiedPhoto;
+        }
+      } catch (verifyErr: any) {
+        return res.status(401).json({ success: false, message: `Firebase ID token verification failed: ${verifyErr.message}` });
+      }
+    } else if (tokenToVerify) {
       try {
         if (googleClient && googleClientId) {
           const ticket = await googleClient.verifyIdToken({
@@ -538,7 +582,7 @@ authRouter.post('/google-auth', async (req: Request, res: Response) => {
         return res.status(401).json({ success: false, message: `Google ID token verification failed: ${verifyErr.message}` });
       }
     } else if (process.env.NODE_ENV === 'production') {
-      return res.status(401).json({ success: false, message: 'Google ID token (idToken / credential) is required in production' });
+      return res.status(401).json({ success: false, message: 'Google ID token (firebaseIdToken / idToken / credential) is required in production' });
     }
 
     if (!verifiedEmail) {

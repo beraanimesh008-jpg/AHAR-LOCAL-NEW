@@ -1,9 +1,22 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  User as FirebaseUser,
+} from 'firebase/auth';
 import { User, UserRole } from '../types';
 import { apiRequest } from '../services/api';
+import { auth, googleProvider } from '../firebase';
+import {
+  syncUserToFirestore,
+  fetchUserProfileFromFirestore,
+} from '../services/firestoreService';
 
 interface AuthContextType {
   user: User | null;
+  firebaseUser: FirebaseUser | null;
+  isFirebaseReady: boolean;
   role: UserRole;
   token: string | null;
   isLoading: boolean;
@@ -14,7 +27,16 @@ interface AuthContextType {
   closeAuthModal: () => void;
   switchPersona: (role: UserRole, email?: string) => Promise<void>;
   login: (emailOrPhone: string, pass: string) => Promise<void>;
-  googleAuth: (googleEmail: string, googleName: string, googlePhoto: string, targetRole: UserRole) => Promise<{ isNewUser: boolean; googleUser?: any }>;
+  googleAuth: (
+    googleEmail: string,
+    googleName: string,
+    googlePhoto: string,
+    targetRole: UserRole,
+    firebaseIdToken?: string
+  ) => Promise<{ isNewUser: boolean; googleUser?: any }>;
+  signInWithFirebaseGoogle: (
+    targetRole: UserRole
+  ) => Promise<{ isNewUser: boolean; googleUser?: any }>;
   registerRole: (formData: any) => Promise<void>;
   adminLogin: (usernameOrEmail: string, pass: string) => Promise<void>;
   logout: () => void;
@@ -23,6 +45,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  firebaseUser: null,
+  isFirebaseReady: false,
   role: 'customer',
   token: null,
   isLoading: true,
@@ -34,14 +58,17 @@ const AuthContext = createContext<AuthContextType>({
   switchPersona: async () => {},
   login: async () => {},
   googleAuth: async () => ({ isNewUser: false }),
+  signInWithFirebaseGoogle: async () => ({ isNewUser: false }),
   registerRole: async () => {},
   adminLogin: async () => {},
   logout: () => {},
-  refreshUser: async () => {}
+  refreshUser: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isFirebaseReady, setIsFirebaseReady] = useState(false);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('aharlocal_token'));
   const [role, setRole] = useState<UserRole>('customer');
   const [roleDetails, setRoleDetails] = useState<any>(null);
@@ -62,7 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       if (!localStorage.getItem('aharlocal_token')) {
-        // Default to demo customer if no session
         await switchPersona('customer');
         return;
       }
@@ -71,7 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRole(data.user.role);
       setRoleDetails(data.roleDetails);
     } catch {
-      // Clear invalid/expired token and fallback switch to demo customer
       localStorage.removeItem('aharlocal_token');
       setToken(null);
       await switchPersona('customer');
@@ -85,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const data = await apiRequest('/api/auth/demo-switch', {
         method: 'POST',
-        body: JSON.stringify({ role: targetRole, email })
+        body: JSON.stringify({ role: targetRole, email }),
       });
       localStorage.setItem('aharlocal_token', data.token);
       setToken(data.token);
@@ -104,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const data = await apiRequest('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ emailOrPhone, password: pass })
+        body: JSON.stringify({ emailOrPhone, password: pass }),
       });
       localStorage.setItem('aharlocal_token', data.token);
       setToken(data.token);
@@ -116,12 +141,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const googleAuth = async (googleEmail: string, googleName: string, googlePhoto: string, targetRole: UserRole) => {
+  const googleAuth = async (
+    googleEmail: string,
+    googleName: string,
+    googlePhoto: string,
+    targetRole: UserRole,
+    firebaseIdToken?: string
+  ) => {
     setIsLoading(true);
     try {
       const res = await apiRequest('/api/auth/google-auth', {
         method: 'POST',
-        body: JSON.stringify({ googleEmail, googleName, googlePhoto, role: targetRole })
+        body: JSON.stringify({
+          googleEmail,
+          googleName,
+          googlePhoto,
+          role: targetRole,
+          firebaseIdToken,
+        }),
       });
 
       if (!res.isNewUser && res.token) {
@@ -140,12 +177,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithFirebaseGoogle = async (targetRole: UserRole) => {
+    setIsLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+      setFirebaseUser(fbUser);
+
+      const firebaseIdToken = await fbUser.getIdToken();
+      if (fbUser.emailVerified) {
+        try {
+          await syncUserToFirestore(fbUser, targetRole);
+        } catch (fsErr) {
+          console.warn('Firestore profile sync warning:', fsErr);
+        }
+      }
+
+      return await googleAuth(
+        fbUser.email || '',
+        fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+        fbUser.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        targetRole,
+        firebaseIdToken
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const registerRole = async (formData: any) => {
     setIsLoading(true);
     try {
       const res = await apiRequest('/api/auth/register-role', {
         method: 'POST',
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       });
       if (res && res.token) {
         localStorage.setItem('aharlocal_token', res.token);
@@ -153,6 +218,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.user);
         setRole(res.user.role);
         setRoleDetails(res.roleDetails);
+
+        if (auth.currentUser && auth.currentUser.emailVerified) {
+          try {
+            await syncUserToFirestore(auth.currentUser, formData.role, {
+              phone: formData.phone,
+              dob: formData.dob,
+              gender: formData.gender,
+              address: formData.address,
+            });
+          } catch (fsErr) {
+            console.warn('Firestore registration sync warning:', fsErr);
+          }
+        }
+
         closeAuthModal();
       }
     } finally {
@@ -165,7 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await apiRequest('/api/auth/admin-login', {
         method: 'POST',
-        body: JSON.stringify({ usernameOrEmail, password: pass })
+        body: JSON.stringify({ usernameOrEmail, password: pass }),
       });
       if (res && res.token) {
         localStorage.setItem('aharlocal_token', res.token);
@@ -180,6 +259,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    signOut(auth).catch(() => {});
     localStorage.removeItem('aharlocal_token');
     setToken(null);
     setUser(null);
@@ -189,13 +269,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      setFirebaseUser(fbUser);
+      setIsFirebaseReady(true);
+
+      if (fbUser && fbUser.emailVerified) {
+        try {
+          await fetchUserProfileFromFirestore(fbUser.uid);
+        } catch (err) {
+          console.warn('Firestore initial profile read warning:', err);
+        }
+      }
+    });
+
     refreshUser();
+    return () => unsubscribe();
   }, []);
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        firebaseUser,
+        isFirebaseReady,
         role,
         token,
         isLoading,
@@ -207,10 +303,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         switchPersona,
         login,
         googleAuth,
+        signInWithFirebaseGoogle,
         registerRole,
         adminLogin,
         logout,
-        refreshUser
+        refreshUser,
       }}
     >
       {children}
