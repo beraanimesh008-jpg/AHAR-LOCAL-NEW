@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { app } from './server/app';
@@ -17,9 +18,15 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
+    const distIndex = path.join(distPath, 'index.html');
+    if (!fs.existsSync(distIndex)) {
+      console.warn('[Server] dist/index.html missing in production; running Vite build...');
+      const { build } = await import('vite');
+      await build();
+    }
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      res.sendFile(distIndex);
     });
   }
 
