@@ -185,8 +185,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // User chooses a Google Account (Sandbox Demo Picker)
+  // User chooses a Google Account (Sandbox Demo Picker - Dev only)
   const handlePickGoogleAccount = async (account: { name: string; email: string; photo: string }) => {
+    if (import.meta.env.PROD) {
+      setErrorMsg('Please sign in with the verified Google popup (Continue with Google).');
+      return;
+    }
     setActiveGoogleUser(account);
     setErrorMsg('');
     try {
@@ -627,160 +631,164 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <span>{isLoading ? 'Signing in with Google...' : 'Continue with Google (Verified Popup)'}</span>
               </button>
 
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-stone-200" />
-                <span className="flex-shrink mx-3 text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                  Or quick-switch demo accounts
-                </span>
-                <div className="flex-grow border-t border-stone-200" />
-              </div>
+              {!import.meta.env.PROD && (
+                <>
+                  <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-stone-200" />
+                    <span className="flex-shrink mx-3 text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Or quick-switch demo accounts
+                    </span>
+                    <div className="flex-grow border-t border-stone-200" />
+                  </div>
 
-              {/* Account List */}
-              <div className="space-y-2 border border-stone-200 rounded-2xl p-2 bg-stone-50/60 shadow-2xs">
-                {/* 1. Primary User Google Account */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    handlePickGoogleAccount({
-                      name: 'Animesh Bera',
-                      email: 'beraanimesh008@gmail.com',
-                      photo: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
-                    })
-                  }
-                  className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
-                      alt="Animesh Bera"
-                      className="w-10 h-10 rounded-full object-cover border border-stone-200"
-                    />
-                    <div>
-                      <div className="text-xs font-extrabold text-stone-900 flex items-center gap-1.5">
-                        <span>Animesh Bera</span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
-                          Primary
-                        </span>
+                  {/* Account List */}
+                  <div className="space-y-2 border border-stone-200 rounded-2xl p-2 bg-stone-50/60 shadow-2xs">
+                    {/* 1. Primary User Google Account */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handlePickGoogleAccount({
+                          name: 'Animesh Bera',
+                          email: 'beraanimesh008@gmail.com',
+                          photo: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+                        })
+                      }
+                      className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
+                          alt="Animesh Bera"
+                          className="w-10 h-10 rounded-full object-cover border border-stone-200"
+                        />
+                        <div>
+                          <div className="text-xs font-extrabold text-stone-900 flex items-center gap-1.5">
+                            <span>Animesh Bera</span>
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                              Primary
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-stone-500">beraanimesh008@gmail.com</div>
+                        </div>
                       </div>
-                      <div className="text-[11px] text-stone-500">beraanimesh008@gmail.com</div>
+                      <ArrowRight className="w-4 h-4 text-stone-400" />
+                    </button>
+
+                    {/* 2. Demo Buyer Account */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handlePickGoogleAccount({
+                          name: 'Priyanka Sen',
+                          email: 'priyanka@aharlocal.com',
+                          photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'
+                        })
+                      }
+                      className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"
+                          alt="Priyanka Sen"
+                          className="w-10 h-10 rounded-full object-cover border border-stone-200"
+                        />
+                        <div>
+                          <div className="text-xs font-extrabold text-stone-900">Priyanka Sen</div>
+                          <div className="text-[11px] text-stone-500">priyanka@aharlocal.com</div>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-stone-400" />
+                    </button>
+
+                    {/* 3. Demo Seller Account */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handlePickGoogleAccount({
+                          name: 'Subrata Ghosh (Kitchen)',
+                          email: 'kolkatabiryani@aharlocal.com',
+                          photo: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=150'
+                        })
+                      }
+                      className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src="https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=150"
+                          alt="Subrata Ghosh"
+                          className="w-10 h-10 rounded-full object-cover border border-stone-200"
+                        />
+                        <div>
+                          <div className="text-xs font-extrabold text-stone-900">Subrata Ghosh</div>
+                          <div className="text-[11px] text-stone-500">kolkatabiryani@aharlocal.com</div>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-stone-400" />
+                    </button>
+
+                    {/* 4. Demo Rider Account */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handlePickGoogleAccount({
+                          name: 'Rahul Sen (Rider)',
+                          email: 'rahul.delivery@aharlocal.com',
+                          photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'
+                        })
+                      }
+                      className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"
+                          alt="Rahul Sen"
+                          className="w-10 h-10 rounded-full object-cover border border-stone-200"
+                        />
+                        <div>
+                          <div className="text-xs font-extrabold text-stone-900">Rahul Sen</div>
+                          <div className="text-[11px] text-stone-500">rahul.delivery@aharlocal.com</div>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-stone-400" />
+                    </button>
+                  </div>
+
+                  {/* Custom Google Account Entry */}
+                  <div className="pt-2 border-t border-stone-200 space-y-2">
+                    <div className="text-xs font-bold text-stone-700">Or use another Google Account:</div>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Your Full Name (e.g. Joydeb Das)"
+                        value={customGoogleName}
+                        onChange={(e) => setCustomGoogleName(e.target.value)}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-hidden focus:border-orange-500"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Your Google Email (e.g. joydeb@gmail.com)"
+                        value={customGoogleEmail}
+                        onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-hidden focus:border-orange-500"
+                      />
+                      <button
+                        type="button"
+                        disabled={!customGoogleEmail || !customGoogleName}
+                        onClick={() =>
+                          handlePickGoogleAccount({
+                            name: customGoogleName,
+                            email: customGoogleEmail,
+                            photo: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+                          })
+                        }
+                        className="w-full bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white font-bold text-xs py-2.5 rounded-xl transition-all"
+                      >
+                        Authenticate with this Google Account
+                      </button>
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400" />
-                </button>
-
-                {/* 2. Demo Buyer Account */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    handlePickGoogleAccount({
-                      name: 'Priyanka Sen',
-                      email: 'priyanka@aharlocal.com',
-                      photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'
-                    })
-                  }
-                  className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"
-                      alt="Priyanka Sen"
-                      className="w-10 h-10 rounded-full object-cover border border-stone-200"
-                    />
-                    <div>
-                      <div className="text-xs font-extrabold text-stone-900">Priyanka Sen</div>
-                      <div className="text-[11px] text-stone-500">priyanka@aharlocal.com</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400" />
-                </button>
-
-                {/* 3. Demo Seller Account */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    handlePickGoogleAccount({
-                      name: 'Subrata Ghosh (Kitchen)',
-                      email: 'kolkatabiryani@aharlocal.com',
-                      photo: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=150'
-                    })
-                  }
-                  className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src="https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=150"
-                      alt="Subrata Ghosh"
-                      className="w-10 h-10 rounded-full object-cover border border-stone-200"
-                    />
-                    <div>
-                      <div className="text-xs font-extrabold text-stone-900">Subrata Ghosh</div>
-                      <div className="text-[11px] text-stone-500">kolkatabiryani@aharlocal.com</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400" />
-                </button>
-
-                {/* 4. Demo Rider Account */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    handlePickGoogleAccount({
-                      name: 'Rahul Sen (Rider)',
-                      email: 'rahul.delivery@aharlocal.com',
-                      photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'
-                    })
-                  }
-                  className="w-full flex items-center justify-between p-3 bg-white hover:bg-orange-50/80 rounded-xl border border-stone-200 transition-all text-left shadow-2xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"
-                      alt="Rahul Sen"
-                      className="w-10 h-10 rounded-full object-cover border border-stone-200"
-                    />
-                    <div>
-                      <div className="text-xs font-extrabold text-stone-900">Rahul Sen</div>
-                      <div className="text-[11px] text-stone-500">rahul.delivery@aharlocal.com</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400" />
-                </button>
-              </div>
-
-              {/* Custom Google Account Entry */}
-              <div className="pt-2 border-t border-stone-200 space-y-2">
-                <div className="text-xs font-bold text-stone-700">Or use another Google Account:</div>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="Your Full Name (e.g. Joydeb Das)"
-                    value={customGoogleName}
-                    onChange={(e) => setCustomGoogleName(e.target.value)}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-hidden focus:border-orange-500"
-                  />
-                  <input
-                    type="email"
-                    placeholder="Your Google Email (e.g. joydeb@gmail.com)"
-                    value={customGoogleEmail}
-                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-hidden focus:border-orange-500"
-                  />
-                  <button
-                    type="button"
-                    disabled={!customGoogleEmail || !customGoogleName}
-                    onClick={() =>
-                      handlePickGoogleAccount({
-                        name: customGoogleName,
-                        email: customGoogleEmail,
-                        photo: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
-                      })
-                    }
-                    className="w-full bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white font-bold text-xs py-2.5 rounded-xl transition-all"
-                  >
-                    Authenticate with this Google Account
-                  </button>
-                </div>
-              </div>
+                </>
+              )}
 
               <button
                 type="button"

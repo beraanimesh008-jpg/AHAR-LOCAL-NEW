@@ -89,6 +89,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       if (!localStorage.getItem('aharlocal_token')) {
+        if (import.meta.env.PROD) {
+          setUser(null);
+          setRole('customer');
+          setRoleDetails(null);
+          return;
+        }
         await switchPersona('customer');
         return;
       }
@@ -99,6 +105,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       localStorage.removeItem('aharlocal_token');
       setToken(null);
+      if (import.meta.env.PROD) {
+        setUser(null);
+        setRole('customer');
+        setRoleDetails(null);
+        return;
+      }
       await switchPersona('customer');
     } finally {
       setIsLoading(false);
