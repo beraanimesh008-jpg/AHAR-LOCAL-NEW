@@ -1,4 +1,4 @@
-import { register } from 'tsx/esm/api';
+import { createRequire } from 'node:module';
 
-register();
-await import('./server.ts');
+const require = createRequire(import.meta.url);
+require('./dist-server/server.cjs');

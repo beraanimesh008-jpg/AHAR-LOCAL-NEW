@@ -4,9 +4,26 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { app } from './server/app';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PORT = Number(process.env.PORT) || 3000;
+const currentDir =
+  typeof __dirname !== 'undefined'
+    ? __dirname
+    : path.dirname(fileURLToPath(import.meta.url));
+const rootDir =
+  path.basename(currentDir) === 'dist-server'
+    ? path.resolve(currentDir, '..')
+    : currentDir;
+const rawPort = process.env.PORT;
+const PORT: number | string = rawPort
+  ? (/^\d+$/.test(rawPort) ? Number(rawPort) : rawPort)
+  : 3000;
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
 
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -17,22 +34,52 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
+    const distPath = path.resolve(rootDir, 'dist');
     const distIndex = path.join(distPath, 'index.html');
+
+    let isBuildingFrontend = false;
     if (!fs.existsSync(distIndex)) {
-      console.warn('[Server] dist/index.html missing in production; running Vite build...');
-      const { build } = await import('vite');
-      await build();
+      isBuildingFrontend = true;
+      console.warn('[Server] dist/index.html missing in production; building Vite frontend in background...');
+      import('vite')
+        .then(({ build }) => build())
+        .then(() => {
+          console.log('[Server] Background Vite frontend build completed.');
+        })
+        .catch((err) => {
+          console.error('[Server] Background Vite build failed:', err);
+        })
+        .finally(() => {
+          isBuildingFrontend = false;
+        });
     }
+
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(distIndex);
+      if (fs.existsSync(distIndex)) {
+        return res.sendFile(distIndex);
+      }
+      if (isBuildingFrontend) {
+        return res
+          .status(200)
+          .set('Content-Type', 'text/html; charset=utf-8')
+          .send(
+            '<!doctype html><html><head><meta http-equiv="refresh" content="3"><title>AharLocal Starting...</title></head><body style="font-family:sans-serif;text-align:center;padding:48px;"><h2>AharLocal is finishing initial setup...</h2><p>Page will reload automatically in a few seconds.</p></body></html>'
+          );
+      }
+      return res.status(500).send('Frontend build not found. Run "npm run build" in Hostinger Build Command.');
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 AharLocal Server running on http://0.0.0.0:${PORT}`);
-  });
+  const onListening = () => {
+    console.log(`🚀 AharLocal Server running on port ${PORT}`);
+  };
+
+  if (typeof PORT === 'number') {
+    app.listen(PORT, '0.0.0.0', onListening);
+  } else {
+    app.listen(PORT, onListening);
+  }
 }
 
 startServer().catch((err) => {
