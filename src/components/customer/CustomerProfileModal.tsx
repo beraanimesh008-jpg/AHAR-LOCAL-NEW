@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   User,
@@ -183,9 +184,9 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white w-full max-w-xl max-h-[92vh] rounded-3xl shadow-2xl border border-stone-200 overflow-hidden relative flex flex-col">
+  const modalContent = (
+    <div className="fixed inset-0 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+      <div className="my-auto bg-white w-full max-w-xl max-h-[90vh] rounded-3xl shadow-2xl border border-stone-200 overflow-hidden relative flex flex-col">
         
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0 shadow-sm relative">
@@ -589,4 +590,10 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') {
+    return modalContent;
+  }
+
+  return createPortal(modalContent, document.body);
 };
