@@ -12,25 +12,35 @@ export interface NotificationPayload {
 }
 
 export const notificationService = {
-  async createNotification(payload: NotificationPayload) {
+  async createNotification(
+    payload: NotificationPayload,
+    conn?: { execute: (sql: string, params: any[]) => Promise<any> }
+  ) {
     if (db.isUsingMysql()) {
       const dataJson = payload.data ? JSON.stringify(payload.data) : null;
-      const res = await db.query(
-        `INSERT INTO notifications (user_id, role, title, title_bn, message, message_bn, type, is_read, data_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-        [
-          payload.userId,
-          payload.role,
-          payload.title,
-          payload.title_bn,
-          payload.message,
-          payload.message_bn,
-          payload.type,
-          dataJson
-        ]
-      );
+      const sql = `INSERT INTO notifications (user_id, role, title, title_bn, message, message_bn, type, is_read, data_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`;
+      const params = [
+        payload.userId,
+        payload.role,
+        payload.title,
+        payload.title_bn,
+        payload.message,
+        payload.message_bn,
+        payload.type,
+        dataJson
+      ];
+
+      let insertId = 1;
+      if (conn) {
+        const [execRes]: any = await conn.execute(sql, params);
+        insertId = execRes?.insertId || 1;
+      } else {
+        const res = await db.query(sql, params);
+        insertId = res.insertId || 1;
+      }
       return {
-        id: res.insertId || 1,
+        id: insertId,
         user_id: payload.userId,
         role: payload.role,
         title: payload.title,

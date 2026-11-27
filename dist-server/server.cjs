@@ -1473,8 +1473,12 @@ if (dbHost && dbUser) {
       database: dbName,
       waitForConnections: true,
       connectionLimit: 10,
+      maxIdle: 5,
+      idleTimeout: 3e4,
       queueLimit: 0,
       connectTimeout: 1e4,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 1e4,
       charset: "utf8mb4"
     });
     useMysql = true;
@@ -1939,25 +1943,31 @@ function requireRole(allowedRoles) {
 
 // server/services/notificationService.ts
 var notificationService = {
-  async createNotification(payload) {
+  async createNotification(payload, conn) {
     if (db.isUsingMysql()) {
       const dataJson = payload.data ? JSON.stringify(payload.data) : null;
-      const res = await db.query(
-        `INSERT INTO notifications (user_id, role, title, title_bn, message, message_bn, type, is_read, data_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-        [
-          payload.userId,
-          payload.role,
-          payload.title,
-          payload.title_bn,
-          payload.message,
-          payload.message_bn,
-          payload.type,
-          dataJson
-        ]
-      );
+      const sql = `INSERT INTO notifications (user_id, role, title, title_bn, message, message_bn, type, is_read, data_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`;
+      const params = [
+        payload.userId,
+        payload.role,
+        payload.title,
+        payload.title_bn,
+        payload.message,
+        payload.message_bn,
+        payload.type,
+        dataJson
+      ];
+      let insertId = 1;
+      if (conn) {
+        const [execRes] = await conn.execute(sql, params);
+        insertId = execRes?.insertId || 1;
+      } else {
+        const res = await db.query(sql, params);
+        insertId = res.insertId || 1;
+      }
       return {
-        id: res.insertId || 1,
+        id: insertId,
         user_id: payload.userId,
         role: payload.role,
         title: payload.title,
@@ -2112,15 +2122,17 @@ authRouter.post("/register", async (req, res) => {
       const pool = db.getPool();
       if (!pool) throw new Error("Database pool uninitialized");
       const conn = await pool.getConnection();
-      await conn.beginTransaction();
+      let committed = false;
+      let newUserId = 0;
+      const profilePhoto = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
       try {
-        const profilePhoto = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
+        await conn.beginTransaction();
         const [userRes] = await conn.execute(
           `INSERT INTO users (name, email, phone, password_hash, role, profile_photo, language, is_active, cod_enabled, auth_provider)
            VALUES (?, ?, ?, ?, ?, ?, 'bn', 1, 0, 'local')`,
           [name, email, phone, passwordHash, role, profilePhoto]
         );
-        const newUserId = userRes.insertId;
+        newUserId = userRes.insertId;
         if (role === "restaurant" && extraInfo) {
           const cuisinesJson = JSON.stringify(extraInfo.cuisines || ["Bengali", "Fast Food"]);
           await conn.execute(
@@ -2170,25 +2182,36 @@ authRouter.post("/register", async (req, res) => {
             message: "Your delivery partner registration has been submitted. Our admin will review your driving license and vehicle documents before approval.",
             message_bn: "\u0986\u09AA\u09A8\u09BE\u09B0 \u09A1\u09C7\u09B2\u09BF\u09AD\u09BE\u09B0\u09BF \u09AA\u09BE\u09B0\u09CD\u099F\u09A8\u09BE\u09B0 \u0986\u09AC\u09C7\u09A6\u09A8 \u099C\u09AE\u09BE \u09B9\u09DF\u09C7\u099B\u09C7\u0964 \u0985\u09CD\u09AF\u09BE\u09A1\u09AE\u09BF\u09A8 \u09A8\u09A5\u09BF\u09AA\u09A4\u09CD\u09B0 \u09AF\u09BE\u099A\u09BE\u0987 \u0995\u09B0\u09C7 \u0985\u09A8\u09C1\u09AE\u09CB\u09A6\u09A8 \u0995\u09B0\u09AC\u09C7\u09A8\u0964",
             type: "admin_alert"
-          });
+          }, conn);
         }
         await conn.commit();
-        conn.release();
-        const newUser2 = { id: newUserId, name, email, phone, role, profile_photo: profilePhoto };
-        const token2 = authService.generateToken(newUser2);
-        return res.status(201).json({
-          success: true,
-          message: "Account registered successfully (\u09A8\u09BF\u09AC\u09A8\u09CD\u09A7\u09A8 \u09B8\u09AB\u09B2 \u09B9\u09DF\u09C7\u099B\u09C7)",
-          data: {
-            token: token2,
-            user: newUser2
-          }
-        });
+        committed = true;
       } catch (transactionErr) {
-        await conn.rollback();
-        conn.release();
+        if (!committed) {
+          try {
+            await conn.rollback();
+          } catch (rollbackErr) {
+            console.error("[Auth] /register rollback failed:", rollbackErr?.message || rollbackErr);
+          }
+        }
         throw transactionErr;
+      } finally {
+        try {
+          conn.release();
+        } catch (releaseErr) {
+          console.error("[Auth] /register connection release failed:", releaseErr?.message || releaseErr);
+        }
       }
+      const newUser2 = { id: newUserId, name, email, phone, role, profile_photo: profilePhoto };
+      const token2 = authService.generateToken(newUser2);
+      return res.status(201).json({
+        success: true,
+        message: "Account registered successfully (\u09A8\u09BF\u09AC\u09A8\u09CD\u09A7\u09A8 \u09B8\u09AB\u09B2 \u09B9\u09DF\u09C7\u099B\u09C7)",
+        data: {
+          token: token2,
+          user: newUser2
+        }
+      });
     }
     const newUser = await authService.createUser({
       name,
@@ -2748,8 +2771,10 @@ authRouter.post("/register-role", async (req, res) => {
       const pool = db.getPool();
       if (!pool) throw new Error("Database pool uninitialized");
       const conn = await pool.getConnection();
-      await conn.beginTransaction();
+      let committed = false;
+      let newUserId = 0;
       try {
+        await conn.beginTransaction();
         const userName = role === "restaurant" && ownerName ? ownerName : name;
         const profilePhoto = passport_photo || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
         const [userRes] = await conn.execute(
@@ -2769,7 +2794,7 @@ authRouter.post("/register-role", async (req, res) => {
             auth_provider
           ]
         );
-        const newUserId = userRes.insertId;
+        newUserId = userRes.insertId;
         if (role === "restaurant") {
           const restName = restaurantName || `${name}'s Kitchen`;
           const cuisinesJson = JSON.stringify(["Bengali", "Fast Food"]);
@@ -2806,7 +2831,7 @@ authRouter.post("/register-role", async (req, res) => {
             message: "Your restaurant registration has been submitted and is currently pending Admin review.",
             message_bn: "\u0986\u09AA\u09A8\u09BE\u09B0 \u09B0\u09C7\u09B8\u09CD\u09A4\u09CB\u09B0\u09BE\u0981 \u0986\u09AC\u09C7\u09A6\u09A8 \u099C\u09AE\u09BE \u09B9\u09DF\u09C7\u099B\u09C7\u0964 \u0985\u09CD\u09AF\u09BE\u09A1\u09AE\u09BF\u09A8 \u09A8\u09A5\u09BF\u09AA\u09A4\u09CD\u09B0 \u09AF\u09BE\u099A\u09BE\u0987 \u0995\u09B0\u09C7 \u0985\u09A8\u09C1\u09AE\u09CB\u09A6\u09A8 \u0995\u09B0\u09AC\u09C7\u09A8\u0964",
             type: "admin_alert"
-          });
+          }, conn);
         } else if (role === "delivery") {
           const [dpRes] = await conn.execute(
             `INSERT INTO delivery_partners (user_id, service_area_id, name, phone, email, vehicle_type, vehicle_number, driving_license_number, aadhaar_photo, document_photo, status, is_online, total_deliveries, rating, wallet_balance)
@@ -2836,7 +2861,7 @@ authRouter.post("/register-role", async (req, res) => {
             message: "Your delivery partner registration with Aadhaar details is submitted. Admin will approve your account soon.",
             message_bn: "\u0986\u09AA\u09A8\u09BE\u09B0 \u0986\u09A7\u09BE\u09B0 \u09B8\u09B9 \u0986\u09AC\u09C7\u09A6\u09A8 \u099C\u09AE\u09BE \u09B9\u09DF\u09C7\u099B\u09C7\u0964 \u0985\u09CD\u09AF\u09BE\u09A1\u09AE\u09BF\u09A8 \u0985\u09A8\u09C1\u09AE\u09CB\u09A6\u09A8 \u0995\u09B0\u09BE\u09B0 \u09AA\u09B0 \u0986\u09AA\u09A8\u09BF \u0985\u09B0\u09CD\u09A1\u09BE\u09B0 \u09A1\u09C7\u09B2\u09BF\u09AD\u09BE\u09B0\u09BF \u0995\u09B0\u09A4\u09C7 \u09AA\u09BE\u09B0\u09AC\u09C7\u09A8\u0964",
             type: "admin_alert"
-          });
+          }, conn);
         } else if (role === "customer") {
           await notificationService.createNotification({
             userId: newUserId,
@@ -2846,16 +2871,31 @@ authRouter.post("/register-role", async (req, res) => {
             message: "Your account is ready. Order fresh, delicious local food anytime!",
             message_bn: "\u0986\u09AA\u09A8\u09BE\u09B0 \u0985\u09CD\u09AF\u09BE\u0995\u09BE\u0989\u09A8\u09CD\u099F \u09A4\u09C8\u09B0\u09BF \u09B9\u09DF\u09C7\u099B\u09C7\u0964 \u0998\u09B0\u09C7\u09B0 \u0995\u09BE\u099B\u09C7\u09B0 \u09B8\u09C1\u09B8\u09CD\u09AC\u09BE\u09A6\u09C1 \u0996\u09BE\u09AC\u09BE\u09B0 \u0985\u09B0\u09CD\u09A1\u09BE\u09B0 \u0995\u09B0\u09C1\u09A8 \u098F\u0996\u09A8\u0987!",
             type: "order_status"
-          });
+          }, conn);
         }
+        const [createdUserRows] = await conn.execute("SELECT * FROM users WHERE id = ? LIMIT 1", [newUserId]);
+        newUser = createdUserRows?.[0] || null;
         await conn.commit();
-        conn.release();
-        const [createdUserRes] = await db.query("SELECT * FROM users WHERE id = ? LIMIT 1", [newUserId]);
-        newUser = createdUserRes.rows[0];
+        committed = true;
       } catch (txErr) {
-        await conn.rollback();
-        conn.release();
+        if (!committed) {
+          try {
+            await conn.rollback();
+          } catch (rollbackErr) {
+            console.error("[Auth] /register-role rollback failed:", rollbackErr?.message || rollbackErr);
+          }
+        }
         throw txErr;
+      } finally {
+        try {
+          conn.release();
+        } catch (releaseErr) {
+          console.error("[Auth] /register-role connection release failed:", releaseErr?.message || releaseErr);
+        }
+      }
+      if (!newUser && newUserId) {
+        const createdUserRes = await db.query("SELECT * FROM users WHERE id = ? LIMIT 1", [newUserId]);
+        newUser = createdUserRes.rows[0] || null;
       }
     } else {
       const store = db.getStore();

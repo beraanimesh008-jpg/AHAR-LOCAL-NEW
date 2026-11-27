@@ -1461,8 +1461,12 @@ if (dbHost && dbUser) {
       database: dbName,
       waitForConnections: true,
       connectionLimit: 10,
+      maxIdle: 5,
+      idleTimeout: 30000,
       queueLimit: 0,
       connectTimeout: 10000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
       charset: 'utf8mb4'
     });
     useMysql = true;

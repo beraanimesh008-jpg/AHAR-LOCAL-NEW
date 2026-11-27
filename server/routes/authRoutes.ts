@@ -80,16 +80,19 @@ authRouter.post('/register', async (req: Request, res: Response) => {
       const pool = db.getPool();
       if (!pool) throw new Error('Database pool uninitialized');
       const conn = await pool.getConnection();
-      await conn.beginTransaction();
+      let committed = false;
+      let newUserId = 0;
+      const profilePhoto = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
 
       try {
-        const profilePhoto = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
+        await conn.beginTransaction();
+
         const [userRes]: any = await conn.execute(
           `INSERT INTO users (name, email, phone, password_hash, role, profile_photo, language, is_active, cod_enabled, auth_provider)
            VALUES (?, ?, ?, ?, ?, ?, 'bn', 1, 0, 'local')`,
           [name, email, phone, passwordHash, role, profilePhoto]
         );
-        const newUserId = userRes.insertId;
+        newUserId = userRes.insertId;
 
         if (role === 'restaurant' && extraInfo) {
           const cuisinesJson = JSON.stringify(extraInfo.cuisines || ['Bengali', 'Fast Food']);
@@ -142,28 +145,39 @@ authRouter.post('/register', async (req: Request, res: Response) => {
             message: 'Your delivery partner registration has been submitted. Our admin will review your driving license and vehicle documents before approval.',
             message_bn: 'আপনার ডেলিভারি পার্টনার আবেদন জমা হয়েছে। অ্যাডমিন নথিপত্র যাচাই করে অনুমোদন করবেন।',
             type: 'admin_alert'
-          });
+          }, conn);
         }
 
         await conn.commit();
-        conn.release();
-
-        const newUser = { id: newUserId, name, email, phone, role, profile_photo: profilePhoto };
-        const token = authService.generateToken(newUser);
-
-        return res.status(201).json({
-          success: true,
-          message: 'Account registered successfully (নিবন্ধন সফল হয়েছে)',
-          data: {
-            token,
-            user: newUser
-          }
-        });
+        committed = true;
       } catch (transactionErr) {
-        await conn.rollback();
-        conn.release();
+        if (!committed) {
+          try {
+            await conn.rollback();
+          } catch (rollbackErr: any) {
+            console.error('[Auth] /register rollback failed:', rollbackErr?.message || rollbackErr);
+          }
+        }
         throw transactionErr;
+      } finally {
+        try {
+          conn.release();
+        } catch (releaseErr: any) {
+          console.error('[Auth] /register connection release failed:', releaseErr?.message || releaseErr);
+        }
       }
+
+      const newUser = { id: newUserId, name, email, phone, role, profile_photo: profilePhoto };
+      const token = authService.generateToken(newUser);
+
+      return res.status(201).json({
+        success: true,
+        message: 'Account registered successfully (নিবন্ধন সফল হয়েছে)',
+        data: {
+          token,
+          user: newUser
+        }
+      });
     }
 
     // In-memory fallback for dev mode without MySQL
@@ -739,9 +753,12 @@ authRouter.post('/register-role', async (req: Request, res: Response) => {
       const pool = db.getPool();
       if (!pool) throw new Error('Database pool uninitialized');
       const conn = await pool.getConnection();
-      await conn.beginTransaction();
+      let committed = false;
+      let newUserId = 0;
 
       try {
+        await conn.beginTransaction();
+
         const userName = role === 'restaurant' && ownerName ? ownerName : name;
         const profilePhoto = passport_photo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
 
@@ -762,7 +779,7 @@ authRouter.post('/register-role', async (req: Request, res: Response) => {
             auth_provider
           ]
         );
-        const newUserId = userRes.insertId;
+        newUserId = userRes.insertId;
 
         if (role === 'restaurant') {
           const restName = restaurantName || `${name}'s Kitchen`;
@@ -803,7 +820,7 @@ authRouter.post('/register-role', async (req: Request, res: Response) => {
             message: 'Your restaurant registration has been submitted and is currently pending Admin review.',
             message_bn: 'আপনার রেস্তোরাঁ আবেদন জমা হয়েছে। অ্যাডমিন নথিপত্র যাচাই করে অনুমোদন করবেন।',
             type: 'admin_alert'
-          });
+          }, conn);
         } else if (role === 'delivery') {
           const [dpRes]: any = await conn.execute(
             `INSERT INTO delivery_partners (user_id, service_area_id, name, phone, email, vehicle_type, vehicle_number, driving_license_number, aadhaar_photo, document_photo, status, is_online, total_deliveries, rating, wallet_balance)
@@ -835,7 +852,7 @@ authRouter.post('/register-role', async (req: Request, res: Response) => {
             message: 'Your delivery partner registration with Aadhaar details is submitted. Admin will approve your account soon.',
             message_bn: 'আপনার আধার সহ আবেদন জমা হয়েছে। অ্যাডমিন অনুমোদন করার পর আপনি অর্ডার ডেলিভারি করতে পারবেন।',
             type: 'admin_alert'
-          });
+          }, conn);
         } else if (role === 'customer') {
           await notificationService.createNotification({
             userId: newUserId,
@@ -845,18 +862,34 @@ authRouter.post('/register-role', async (req: Request, res: Response) => {
             message: 'Your account is ready. Order fresh, delicious local food anytime!',
             message_bn: 'আপনার অ্যাকাউন্ট তৈরি হয়েছে। ঘরের কাছের সুস্বাদু খাবার অর্ডার করুন এখনই!',
             type: 'order_status'
-          });
+          }, conn);
         }
 
-        await conn.commit();
-        conn.release();
+        const [createdUserRows]: any = await conn.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [newUserId]);
+        newUser = createdUserRows?.[0] || null;
 
-        const [createdUserRes]: any = await db.query('SELECT * FROM users WHERE id = ? LIMIT 1', [newUserId]);
-        newUser = createdUserRes.rows[0];
+        await conn.commit();
+        committed = true;
       } catch (txErr) {
-        await conn.rollback();
-        conn.release();
+        if (!committed) {
+          try {
+            await conn.rollback();
+          } catch (rollbackErr: any) {
+            console.error('[Auth] /register-role rollback failed:', rollbackErr?.message || rollbackErr);
+          }
+        }
         throw txErr;
+      } finally {
+        try {
+          conn.release();
+        } catch (releaseErr: any) {
+          console.error('[Auth] /register-role connection release failed:', releaseErr?.message || releaseErr);
+        }
+      }
+
+      if (!newUser && newUserId) {
+        const createdUserRes = await db.query('SELECT * FROM users WHERE id = ? LIMIT 1', [newUserId]);
+        newUser = createdUserRes.rows[0] || null;
       }
     } else {
       const store = db.getStore();
