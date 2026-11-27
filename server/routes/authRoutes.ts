@@ -995,10 +995,16 @@ authRouter.post('/admin-login', async (req: Request, res: Response) => {
 
     if (db.isUsingMysql()) {
       const cleanInput = String(usernameOrEmail).trim();
-      const userRes = await db.query(
-        'SELECT * FROM users WHERE role = "admin" AND (LOWER(email) = LOWER(?) OR ? = "admin" OR ? = "aharlocal") LIMIT 1',
-        [cleanInput, cleanInput.toLowerCase(), cleanInput.toLowerCase()]
-      );
+      const isAdminAlias = cleanInput.toLowerCase() === 'admin' || cleanInput.toLowerCase() === 'aharlocal';
+      const userRes = isAdminAlias
+        ? await db.query(
+            "SELECT * FROM users WHERE role = 'admin' LIMIT 1",
+            []
+          )
+        : await db.query(
+            "SELECT * FROM users WHERE role = 'admin' AND LOWER(email) = LOWER(?) LIMIT 1",
+            [cleanInput]
+          );
       adminUser = userRes.rows[0] || null;
     } else {
       const store = db.getStore();
