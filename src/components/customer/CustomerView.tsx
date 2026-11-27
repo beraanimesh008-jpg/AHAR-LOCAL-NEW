@@ -219,6 +219,9 @@ export const CustomerView: React.FC = () => {
     }
   };
 
+  const isUsingDefaultFallbackLocation =
+    Math.abs(deliveryLat - 22.5292) < 0.0001 && Math.abs(deliveryLng - 88.3612) < 0.0001;
+
   // GPS Request - ONLY requested on explicit user tap
   const handleRequestGPS = () => {
     setLocationAlert(null);
@@ -227,19 +230,33 @@ export const CustomerView: React.FC = () => {
       return;
     }
 
+    const onSuccess = (pos: GeolocationPosition) => {
+      const { latitude, longitude } = pos.coords;
+      setDeliveryLocation(`Near Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`, latitude, longitude);
+      setLocationAlert('Location detected via device GPS!');
+    };
+
+    const onFailure = () => {
+      setLocationAlert(
+        'Location permission was denied or unavailable. You can easily pick your delivery location on Google Maps.'
+      );
+      setIsAddressModalOpen(true);
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setDeliveryLocation(`Near Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`, latitude, longitude);
-        setLocationAlert('Location detected via device GPS!');
-      },
+      onSuccess,
       (err) => {
-        setLocationAlert(
-          'Location permission was denied or unavailable. You can easily pick your delivery location on Google Maps.'
+        if (err.code === err.PERMISSION_DENIED) {
+          onFailure();
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          onFailure,
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
         );
-        setIsAddressModalOpen(true);
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
@@ -1398,22 +1415,25 @@ export const CustomerView: React.FC = () => {
 
       {/* Manual Address Picker Modal */}
       {isAddressModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-5 shadow-2xl border border-stone-200 space-y-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="my-auto bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl p-5 shadow-2xl border border-stone-200 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-stone-900 text-base">Select Delivery Location</h3>
-                <p className="text-xs text-stone-500">Pick anywhere on the Google Map or tap your saved pins</p>
+                <p className="text-xs text-stone-500">Pick anywhere on the Google Map or tap My GPS for your current location</p>
               </div>
               <button
                 onClick={() => setIsAddressModalOpen(false)}
-                className="text-stone-400 hover:text-stone-700 text-sm font-bold"
+                className="text-stone-400 hover:text-stone-700 text-sm font-bold cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             <LocationPickerMap
+              initialLat={deliveryLat}
+              initialLng={deliveryLng}
+              autoDetectOnMount={isUsingDefaultFallbackLocation}
               heightClass="h-[260px]"
               onLocationSelected={(lat, lng, label) => {
                 setDeliveryLocation(
@@ -1430,7 +1450,7 @@ export const CustomerView: React.FC = () => {
               </label>
               <textarea
                 value={deliveryAddress}
-                onChange={(e) => setDeliveryLocation(e.target.value, 22.5292, 88.3612)}
+                onChange={(e) => setDeliveryLocation(e.target.value, deliveryLat, deliveryLng)}
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-xs font-medium focus:outline-hidden focus:border-orange-500"
                 rows={2}
               />
@@ -1439,7 +1459,7 @@ export const CustomerView: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setIsAddressModalOpen(false)}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md"
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md cursor-pointer"
               >
                 Confirm Location (ঠিকানা নিশ্চিত করুন)
               </button>

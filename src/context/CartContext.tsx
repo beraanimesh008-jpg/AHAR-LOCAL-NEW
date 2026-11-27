@@ -267,24 +267,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return new Promise((resolve) => {
+      const onSuccess = (position: GeolocationPosition) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const label = `Current Live Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+        setDeliveryLocation(label, lat, lng);
+        resolve({
+          success: true,
+          message: 'Live GPS location updated successfully',
+          lat,
+          lng
+        });
+      };
+
+      const onFinalError = (error: GeolocationPositionError) => {
+        resolve({
+          success: false,
+          message: error.message || 'Unable to retrieve GPS coordinates'
+        });
+      };
+
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          const label = `Current Live Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          setDeliveryLocation(label, lat, lng);
-          resolve({
-            success: true,
-            message: 'Live GPS location updated successfully',
-            lat,
-            lng
-          });
-        },
+        onSuccess,
         (error) => {
-          resolve({
-            success: false,
-            message: error.message || 'Unable to retrieve GPS coordinates'
-          });
+          if (error.code === error.PERMISSION_DENIED) {
+            onFinalError(error);
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            onSuccess,
+            onFinalError,
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+          );
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
